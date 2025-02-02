@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog App</title>
+    <!-- Подключаем Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .post {
+            margin-bottom: 20px;
+        }
+        .comment {
+            margin-left: 20px;
+            margin-top: 10px;
+            border-left: 2px solid #ddd;
+            padding-left: 10px;
+        }
+        .comment-reply {
+            margin-left: 40px;
+        }
+        .auth-form {
+            display: none;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="text-center mb-4">Blog App</h1>
+
+        <!-- Кнопки для авторизации и выхода -->
+        <div class="mb-4">
+            <button id="auth-button" class="btn btn-success" onclick="toggleAuthForm()">Login</button>
+            <button id="register-button" class="btn btn-info ms-2" onclick="toggleRegisterForm()">Register</button>
+            <button id="logout-button" class="btn btn-danger ms-2" onclick="logout()" style="display: none;">Logout</button>
+            <span id="user-info" class="ms-3"></span>
+        </div>
+
+        <!-- Форма авторизации -->
+        <div id="auth-form" class="auth-form">
+            <div class="mb-3">
+                <label for="username" class="form-label">Username</label>
+                <input type="text" class="form-control" id="username" placeholder="Enter your username">
+            </div>
+            <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" class="form-control" id="password" placeholder="Enter your password">
+            </div>
+            <button class="btn btn-primary" onclick="login()">Submit</button>
+        </div>
+
+        <!-- Форма регистрации -->
+        <div id="register-form" class="auth-form">
+            <div class="mb-3">
+                <label for="register-username" class="form-label">Username</label>
+                <input type="text" class="form-control" id="register-username" placeholder="Enter your username">
+            </div>
+            <div class="mb-3">
+                <label for="register-fullname" class="form-label">Full Name</label>
+                <input type="text" class="form-control" id="register-fullname" placeholder="Enter your full name">
+            </div>
+            <div class="mb-3">
+                <label for="register-email" class="form-label">Email</label>
+                <input type="email" class="form-control" id="register-email" placeholder="Enter your email">
+            </div>
+            <div class="mb-3">
+                <label for="register-password" class="form-label">Password</label>
+                <input type="password" class="form-control" id="register-password" placeholder="Enter your password">
+            </div>
+            <button class="btn btn-primary" onclick="register()">Register</button>
+        </div>
+
+        <!-- Фильтр по тегам -->
+        <div class="mb-4">
+            <label for="tag-filter" class="form-label">Filter by Tag:</label>
+            <select id="tag-filter" class="form-select" onchange="loadPostsByTag()">
+                <option value="">All Posts</option>
+                <!-- Теги будут загружены динамически -->
+            </select>
+        </div>
+
+        <!-- Кнопка для перехода на страницу создания поста -->
+        <div class="mb-4">
+            <a href="create_post.html" class="btn btn-primary">Create New Post</a>
+        </div>
+
+        <!-- Список постов -->
+        <h2 class="mb-3">Posts</h2>
+        <div id="posts">
+            <!-- Посты будут загружены динамически -->
+        </div>
+
+        <!-- Пагинация -->
+        <nav aria-label="Page navigation">
+            <ul class="pagination" id="pagination">
+                <!-- Кнопки пагинации будут загружены динамически -->
+            </ul>
+        </nav>
+    </div>
+
+    <!-- Подключаем Bootstrap JS (необходим для некоторых компонентов) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_URL = "http://localhost:8000";  // Замените на ваш URL API
+        let currentPage = 1;
+        const pageSize = 10;
+        let currentUser = null;
+
+        // Функция для отображения/скрытия формы авторизации
+        function toggleAuthForm() {
+            const authForm = document.getElementById('auth-form');
+            authForm.style.display = authForm.style.display === 'none' ? 'block' : 'none';
+            document.getElementById('register-form').style.display = 'none';  // Скрываем форму регистрации
+        }
+
+        // Функция для отображения/скрытия формы регистрации
+        function toggleRegisterForm() {
+            const registerForm = document.getElementById('register-form');
+            registerForm.style.display = registerForm.style.display === 'none' ? 'block' : 'none';
+            document.getElementById('auth-form').style.display = 'none';  // Скрываем форму авторизации
+        }
+
+        // Функция для авторизации пользователя
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (!username || !password) {
+                alert("Please enter both username and password.");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/auth/token`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                localStorage.setItem('token', data.access_token);  // Сохраняем токен в localStorage
+                await loadCurrentUser();  // Загружаем информацию о текущем пользователе
+                toggleAuthForm();  // Скрываем форму авторизации
+                updateAuthUI();  // Обновляем интерфейс
+            } catch (error) {
+                console.error("Failed to login:", error);
+                alert("Failed to login. Check the console for details.");
+            }
+        }
+
+        // Функция для регистрации пользователя
+        async function register() {
+            const username = document.getElementById('register-username').value;
+            const fullname = document.getElementById('register-fullname').value;
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+
+            if (!username || !fullname || !email || !password) {
+                alert("Please fill all fields.");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/auth/`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        nickname: username,
+                        fullname: fullname,
+                        email: email,
+                        password: password,
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                alert("Registration successful! Please login.");
+                toggleRegisterForm();  // Скрываем форму регистрации
+            } catch (error) {
+                console.error("Failed to register:", error);
+                alert("Failed to register. Check the console for details.");
+            }
+        }
+
+        // Функция для выхода из системы
+        function logout() {
+            localStorage.removeItem('token');  // Удаляем токен из localStorage
+            currentUser = null;  // Сбрасываем текущего пользователя
+            updateAuthUI();  // Обновляем интерфейс
+            alert("You have been logged out.");
+        }
+
+        // Функция для обновления интерфейса в зависимости от состояния авторизации
+        function updateAuthUI() {
+            const authButton = document.getElementById('auth-button');
+            const registerButton = document.getElementById('register-button');
+            const logoutButton = document.getElementById('logout-button');
+            const userInfo = document.getElementById('user-info');
+
+            if (currentUser) {
+                authButton.style.display = 'none';  // Скрываем кнопку Login
+                registerButton.style.display = 'none';  // Скрываем кнопку Register
+                logoutButton.style.display = 'inline-block';  // Показываем кнопку Logout
+                userInfo.textContent = `Logged in as: ${currentUser.nickname}`;
+            } else {
+                authButton.style.display = 'inline-block';  // Показываем кнопку Login
+                registerButton.style.display = 'inline-block';  // Показываем кнопку Register
+                logoutButton.style.display = 'none';  // Скрываем кнопку Logout
+                userInfo.textContent = '';  // Очищаем информацию о пользователе
+            }
+        }
+
+        // Функция для загрузки информации о текущем пользователе
+        async function loadCurrentUser() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                return;  // Если токена нет, просто выходим
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/auth/read_current_user`, {
+                    method: "GET",
+                    headers: {
+                        "Authorization": `Bearer ${token}`,
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                currentUser = data.User;
+                updateAuthUI();  // Обновляем интерфейс после загрузки пользователя
+            } catch (error) {
+                console.error("Failed to load current user:", error);
+                // Не показываем ошибку пользователю, просто пропускаем
+            }
+        }
+
+        // Загрузить все теги
+        async function loadTags() {
+            try {
+                const response = await fetch(`${API_URL}/tags/all`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const tags = await response.json();
+                const tagFilter = document.getElementById('tag-filter');
+
+                // Очищаем список тегов
+                tagFilter.innerHTML = '<option value="">All Posts</option>';
+
+                // Добавляем теги в выпадающий список
+                tags.forEach(tag => {
+                    const option = document.createElement('option');
+                    option.value = tag.id;
+                    option.textContent = tag.name;
+                    tagFilter.appendChild(option);
+                });
+            } catch (error) {
+                console.error("Failed to load tags:", error);
+                alert("Failed to load tags. Check the console for details.");
+            }
+        }
+
+        // Загрузить посты по выбранному тегу
+        async function loadPostsByTag() {
+            const tagFilter = document.getElementById('tag-filter');
+            const tagId = tagFilter.value;
+
+            if (tagId) {
+                // Загружаем посты по тегу
+                try {
+                    const response = await fetch(`${API_URL}/posts/all/${tagId}?page=${currentPage}&size=${pageSize}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    renderPosts(data.posts);
+                    renderPagination(data.pagination);
+                } catch (error) {
+                    console.error("Failed to load posts by tag:", error);
+                    alert("Failed to load posts by tag. Check the console for details.");
+                }
+            } else {
+                // Загружаем все посты, если тег не выбран
+                loadPosts(currentPage);
+            }
+        }
+
+        // Загрузить посты
+        async function loadPosts(page = 1) {
+            try {
+                const response = await fetch(`${API_URL}/posts/all?page=${page}&size=${pageSize}`);
+
+                // Проверка статуса ответа
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                // Парсинг JSON
+                const data = await response.json();
+                console.log("Posts loaded:", data);  // Логируем данные для отладки
+
+                // Проверка структуры данных
+                if (!data.posts || !Array.isArray(data.posts)) {
+                    throw new Error("Invalid data format: posts not found or not an array");
+                }
+
+                // Отображение постов
+                renderPosts(data.posts);
+
+                // Обновление пагинации
+                if (data.pagination) {
+                    renderPagination(data.pagination);
+                }
+            } catch (error) {
+                console.error("Failed to load posts:", error);
+                alert("Failed to load posts. Check the console for details.");
+            }
+        }
+
+        // Отображение постов
+        function renderPosts(posts) {
+            const postsContainer = document.getElementById("posts");
+            if (!postsContainer) {
+                console.error("Posts container not found!");
+                return;
+            }
+
+            // Очистка контейнера
+            postsContainer.innerHTML = "";
+
+            // Добавление постов
+            posts.forEach(post => {
+                const postDiv = document.createElement("div");
+                postDiv.className = "card post mb-3";  // Добавляем классы для стилизации
+                postDiv.dataset.postId = post.id;  // Добавляем postId в data-атрибут
+                postDiv.innerHTML = `
+                    <div class="card-body">
+                        <h3 class="card-title">${post.title}</h3>
+                        <p class="card-text">${post.content}</p>
+                        <p class="card-text"><strong>Author:</strong> ${post.author_fullname || post.author_nickname || "Unknown"}</p>
+                        <p class="card-text"><strong>Created At:</strong> ${new Date(post.created_at).toLocaleString()}</p>
+                        <p class="card-text"><strong>Tags:</strong> ${post.tags.map(tag => tag.name).join(", ")}</p>
+                        <button class="btn btn-danger me-2" onclick="deletePost(${post.id})">Delete</button>
+                        <button class="btn btn-warning me-2" onclick="editPost(${post.id})">Edit</button>
+                        <div class="mt-3">
+                            <h4>Comments</h4>
+                            <div id="comments-${post.id}">
+                                ${renderComments(post.comments)}
+                            </div>
+                            <div class="input-group mb-3">
+                                <input type="text" id="comment-input-${post.id}" class="form-control" placeholder="Add a comment">
+                                <button class="btn btn-success" onclick="addComment(${post.id}, null)">Add Comment</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                postsContainer.appendChild(postDiv);
+            });
+        }
+
+        // Переход на страницу редактирования поста
+        function editPost(postId) {
+            window.location.href = `edit_post.html?postId=${postId}`;
+        }
+
+        // Отображение комментариев
+        function renderComments(comments, parentId = null) {
+            if (!comments || !Array.isArray(comments)) {
+                return "";
+            }
+
+            return comments
+                .filter(comment => comment.parent_id === parentId)
+                .map(comment => `
+                    <div class="comment ${parentId ? 'comment-reply' : ''}" id="comment-${comment.id}">
+                        <p class="card-text"><strong>${comment.author_fullname || comment.author_nickname || "Unknown"}</strong> (${new Date(comment.created_at).toLocaleString()}): ${comment.text}</p>
+                        <button class="btn btn-sm btn-outline-primary" onclick="replyToComment(${comment.id})">Reply</button>
+                        ${renderComments(comments, comment.id)}
+                    </div>
+                `)
+                .join("");
+        }
+
+        // Отображение пагинации
+        function renderPagination(pagination) {
+            const paginationContainer = document.getElementById("pagination");
+            if (!paginationContainer) {
+                console.error("Pagination container not found!");
+                return;
+            }
+
+            // Очистка контейнера
+            paginationContainer.innerHTML = "";
+
+            // Добавление кнопок пагинации
+            for (let i = 1; i <= pagination.pages; i++) {
+                const li = document.createElement("li");
+                li.className = `page-item ${i === pagination.page ? 'active' : ''}`;
+                li.innerHTML = `<a class="page-link" href="#" onclick="loadPosts(${i})">${i}</a>`;
+                paginationContainer.appendChild(li);
+            }
+        }
+
+        // Удалить пост
+        async function deletePost(postId) {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_URL}/posts/${postId}`, {
+                    method: "DELETE",
+                    headers: {
+                        "Authorization": `Bearer ${token}`,
+                    },
+                });
+
+                if (response.ok) {
+                    alert("Post deleted successfully!");
+                    loadPosts(currentPage);  // Перезагружаем посты
+                } else {
+                    throw new Error(`Failed to delete post: ${response.status}`);
+                }
+            } catch (error) {
+                console.error("Failed to delete post:", error);
+                alert("Failed to delete post. Check the console for details.");
+            }
+        }
+
+        // Добавить комментарий
+        async function addComment(postId, parentId) {
+            const commentInputId = parentId ? `reply-input-${parentId}` : `comment-input-${postId}`;
+            const commentInput = document.getElementById(commentInputId);
+
+            if (!commentInput) {
+                console.error(`Comment input with id="${commentInputId}" not found!`);
+                return;
+            }
+
+            const text = commentInput.value;
+
+            if (!text) {
+                alert("Comment text cannot be empty!");
+                return;
+            }
+
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_URL}/comments/${postId}/post`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        author_id: currentUser.id,  // Используем ID текущего пользователя
+                        parent_id: parentId,
+                    }),
+                });
+
+                if (response.ok) {
+                    alert("Comment added successfully!");
+                    loadPosts(currentPage);  // Перезагружаем посты
+                } else {
+                    throw new Error(`Failed to add comment: ${response.status}`);
+                }
+            } catch (error) {
+                console.error("Failed to add comment:", error);
+                alert("Failed to add comment. Check the console for details.");
+            }
+        }
+
+        // Ответить на комментарий
+        function replyToComment(commentId) {
+            const commentContainer = document.getElementById(`comment-${commentId}`);
+
+            if (!commentContainer) {
+                console.error(`Comment container with id="comment-${commentId}" not found!`);
+                return;
+            }
+
+            const replyInput = document.createElement("input");
+            replyInput.type = "text";
+            replyInput.className = "form-control";
+            replyInput.placeholder = "Reply to this comment";
+            replyInput.id = `reply-input-${commentId}`;
+
+            const replyButton = document.createElement("button");
+            replyButton.className = "btn btn-sm btn-success";
+            replyButton.textContent = "Send";
+            replyButton.onclick = () => {
+                const text = replyInput.value;
+                if (text) {
+                    const postId = commentContainer.closest('.post').dataset.postId;
+                    if (postId) {
+                        addComment(postId, commentId);
+                    } else {
+                        console.error("Post ID not found!");
+                    }
+                } else {
+                    alert("Comment text cannot be empty!");
+                }
+            };
+
+            const replyContainer = document.createElement("div");
+            replyContainer.className = "input-group mb-3";
+            replyContainer.appendChild(replyInput);
+            replyContainer.appendChild(replyButton);
+
+            commentContainer.appendChild(replyContainer);
+        }
+
+        // Загрузить посты и теги при загрузке страницы
+        window.onload = () => {
+            loadPosts(currentPage);
+            loadTags();  // Загружаем теги
+            loadCurrentUser();  // Загружаем информацию о текущем пользователе
+        };
+    </script>
+</body>
+</html>
