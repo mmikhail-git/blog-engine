@@ -35,7 +35,7 @@
 
 - Инструкции по запуску
   - Клонируйте репозиторий:
-    - git clone https://github.com/ваш-username/ваш-репозиторий.git](https://github.com/mmikhail-git/blog-engine.git
+    - git clone https://github.com/mmikhail-git/blog-engine.git
   - Запустите проект с помощью Docker Compose:
     - docker-compose up --build
 
