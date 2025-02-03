@@ -36,7 +36,12 @@
 - Инструкции по запуску
   - Клонируйте репозиторий:
     - git clone https://github.com/mmikhail-git/blog-engine.git
+  - Перейдите в папку проекта
+    - cd blog-engine  
   - Запустите проект с помощью Docker Compose:
-    - docker-compose up --build
+    - docker compose up --build
+  - Выполните миграции БД
+    - docker compose -f docker-compose.yml exec web alembic upgrade head
+
 
  Демо проекта доступно по ссылке - http://forb1.tech/index.html 
