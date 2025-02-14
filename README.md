@@ -44,4 +44,4 @@
     - docker compose -f docker-compose.yml exec web alembic upgrade head
 
 
- Демо проекта доступно по ссылке - http://forb1.tech/index.html 
+ Демо проекта доступно по ссылке - http://forb1.tech
